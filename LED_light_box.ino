@@ -121,8 +121,8 @@ void all_on() {
 }
 
 void delayCycle(long waitFor) {
-  unsigned long last = cycle;
-  unsigned long waitUntil = last + waitFor;
+  // Add wait duration to current cyclecount (may overflow)
+  unsigned long waitUntil = cycle + waitFor;
 
   while (cycle < waitUntil) yield();
 }
@@ -136,7 +136,7 @@ ISR(TIM1_COMPA_vect) {
   shift(1 << row_num);
   //shiftOut(pinData, pinClock, MSBFIRST, (1 << row_num));
   
-  // Shift out 1 row
+  // Shift out 1 row MSB first
   shift(data[2]);
   shift(data[1]);
   shift(data[0]);
