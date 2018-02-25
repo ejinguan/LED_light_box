@@ -1,6 +1,11 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+//basic bit manipulation macros/defines
+#define bit_set(p, m) ((p) |= (m))
+#define bit_clear(p, m) ((p) &= ~(m))
+#define bit_flip(p, m)  ((p) ^= (m))
+#define bit_get(p, m) ((p) & (m))
 
 //These are for Timer1
 #define PRESCALE0_1 _BV(CS10)
@@ -16,7 +21,7 @@ const int pinClock = 7; // PA7
 const int pinLatch = 8; // PB2
 
 int counter = 0;
-volatile byte data[3];
+volatile byte data[3]; //data[4][8][3]; // rows / cols / colours
 volatile int row_num = 0;
 
 volatile unsigned long cycle = 0;
@@ -32,9 +37,13 @@ void setup() {
   TIMSK1 |= (1 << OCIE1A); // enable the CTC interrupt
   
   // sei();                // enable global interrupts
+  /*
   OCR1A = 833;             // Should return frequency ~1000hz
-  TCCR1B |= PRESCALE0_1;
-
+  TCCR1B |= PRESCALE0_1;   // No prescaling
+  */
+  OCR1A = 1000;            // Should return frequency ~1000hz
+  TCCR1B |= PRESCALE0_8;   // Prescaler 8
+  
   
   // initialize the digital pin as an output.
   pinMode(pinData,  OUTPUT);
@@ -120,20 +129,53 @@ void delayCycle(long waitFor) {
 
 
 ISR(TIM1_COMPA_vect) { 
+  // Reset row number if it has reached 4: 0~3 only
   if (row_num >= 4) row_num = 0;
   
   // Enable row
-  shiftOut(pinData, pinClock, MSBFIRST, (1 << row_num));
+  shift(1 << row_num);
+  //shiftOut(pinData, pinClock, MSBFIRST, (1 << row_num));
   
   // Shift out 1 row
-  shiftOut(pinData, pinClock, MSBFIRST, data[2]);
-  shiftOut(pinData, pinClock, MSBFIRST, data[1]);
-  shiftOut(pinData, pinClock, MSBFIRST, data[0]);
+  shift(data[2]);
+  shift(data[1]);
+  shift(data[0]);
+  //shiftOut(pinData, pinClock, MSBFIRST, data[2]);
+  //shiftOut(pinData, pinClock, MSBFIRST, data[1]);
+  //shiftOut(pinData, pinClock, MSBFIRST, data[0]);
 
   // Latch on the outputs and then off
-  digitalWrite(pinLatch, HIGH);
-  digitalWrite(pinLatch, LOW);
+  // Latch Pin = PB2
+  bit_set  (PORTB, _BV(PB2));
+  bit_clear(PORTB, _BV(PB2));
+  //digitalWrite(pinLatch, HIGH);
+  //dgitalWrite(pinLatch, LOW);
 
+  // Increment row number
   row_num++;
+  // Increment cycle counter
   cycle++;
 }
+
+void frame() {
+  
+}
+
+void shift(byte data) {
+  // Data Pin = PA6
+  // Clock Pin = PA7
+  
+  // MSB, shift out from biggest to smallest
+  for (int i = 7; i >= 0; i--) {
+    
+    // check if ith bit is on
+    if ( !!(data & (1 << i)) )
+      bit_set  (PORTA, _BV(PA6));
+    else
+      bit_clear(PORTA, _BV(PA6));
+
+    bit_set  (PORTA, _BV(PA7)); // Toggle PA7
+    bit_clear(PORTA, _BV(PA7));
+  }
+}
+
